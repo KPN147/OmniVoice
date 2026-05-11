@@ -10,6 +10,13 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
+try:
+    from google.colab import auth
+    from google.auth import default
+    IN_COLAB = True
+except ImportError:
+    IN_COLAB = False
+
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/spreadsheets']
 
@@ -38,6 +45,14 @@ class OmniVoiceDB:
             print(f"Please ensure {self.creds_path} exists and is valid.")
 
     def authenticate(self):
+        if IN_COLAB:
+            print("Detected Google Colab environment. Using built-in authentication...")
+            auth.authenticate_user()
+            self.creds, _ = default()
+            self.drive_service = build('drive', 'v3', credentials=self.creds)
+            self.gc = gspread.authorize(self.creds)
+            return
+
         if os.path.exists(self.token_path):
             self.creds = Credentials.from_authorized_user_file(self.token_path, SCOPES)
         # If there are no (valid) credentials available, let the user log in.

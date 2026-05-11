@@ -29,3 +29,5 @@ examples/exp*/
 *.wav
 *.jsonl
 update.md
+credentials.json
+token.json
