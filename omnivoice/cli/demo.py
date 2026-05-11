@@ -26,6 +26,9 @@ Usage:
 import argparse
 import logging
 from typing import Any, Dict
+import tempfile
+import soundfile as sf
+import pandas as pd
 
 import gradio as gr
 import numpy as np
@@ -33,6 +36,7 @@ import torch
 
 from omnivoice import OmniVoice, OmniVoiceGenerationConfig
 from omnivoice.utils.lang_map import LANG_NAMES, lang_display_name
+from omnivoice.cli.db import OmniVoiceDB
 
 
 def get_best_device():
@@ -151,6 +155,7 @@ def build_demo(
 ) -> gr.Blocks:
 
     sampling_rate = model.sampling_rate
+    db = OmniVoiceDB()
 
     # -- shared generation core --
     def _gen_core(
@@ -307,11 +312,19 @@ by Xiaomi Next-gen Kaldi team.
 """
         )
 
+        def get_voice_clone_choices():
+            if not db.initialized:
+                return []
+            df = db.get_voice_clones()
+            if df.empty:
+                return []
+            return df["Name"].tolist()
+
         with gr.Tabs():
             # ==============================================================
             # Voice Clone
             # ==============================================================
-            with gr.TabItem("Voice Clone"):
+            with gr.TabItem("Trang chủ (Tạo Voice)"):
                 with gr.Row():
                     with gr.Column(scale=1):
                         vc_text = gr.Textbox(
@@ -319,22 +332,13 @@ by Xiaomi Next-gen Kaldi team.
                             lines=4,
                             placeholder="Enter the text you want to synthesize...",
                         )
-                        vc_ref_audio = gr.Audio(
-                            label="Reference Audio / 参考音频",
-                            type="filepath",
-                            elem_classes="compact-audio",
+                        vc_clone_dropdown = gr.Dropdown(
+                            label="Choose Voice Clone / Chọn Voice Clone",
+                            choices=get_voice_clone_choices(),
+                            interactive=True,
                         )
-                        gr.Markdown(
-                            "<span style='font-size:0.85em;color:#888;'>"
-                            "Recommended: 3–10 seconds audio. "
-                            "</span>"
-                        )
-                        vc_ref_text = gr.Textbox(
-                            label=("Reference Text (optional)" " / 参考音频文本（可选）"),
-                            lines=2,
-                            placeholder="Transcript of the reference audio. Leave empty"
-                            " to auto-transcribe via ASR models.",
-                        )
+                        vc_refresh_clones_btn = gr.Button("Refresh Voice Clones / Tải lại danh sách")
+                        
                         vc_lang = _lang_dropdown("Language (optional) / 语种 (可选)")
                         (
                             vc_ns,
@@ -353,13 +357,44 @@ by Xiaomi Next-gen Kaldi team.
                         )
                         vc_status = gr.Textbox(label="Status / 状态", lines=2)
 
+                def _refresh_choices():
+                    return gr.update(choices=get_voice_clone_choices())
+                
+                vc_refresh_clones_btn.click(fn=_refresh_choices, inputs=[], outputs=[vc_clone_dropdown])
+
                 def _clone_fn(
-                    text, lang, ref_aud, ref_text, ns, gs, dn, sp, du, pp, po
+                    text, lang, clone_name, ns, gs, dn, sp, du, pp, po
                 ):
-                    return _gen(
+                    if not db.initialized:
+                        return None, "Database not initialized. Check credentials."
+                    if not clone_name:
+                        return None, "Please select a Voice Clone."
+                    if not text or not text.strip():
+                        return None, "Please enter text."
+                    
+                    df = db.get_voice_clones()
+                    clone_row = df[df["Name"] == clone_name]
+                    if clone_row.empty:
+                        return None, "Selected Voice Clone not found in DB."
+                    
+                    audio_drive_id = clone_row.iloc[0]["Ref Audio Drive ID"]
+                    ref_text = clone_row.iloc[0]["Ref Text"]
+                    
+                    history_id = db.add_history(text, clone_name, "Processing")
+                    
+                    # Download ref audio to temp
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_ref:
+                        ref_audio_path = tmp_ref.name
+                    
+                    success = db.download_audio(audio_drive_id, ref_audio_path)
+                    if not success:
+                        db.update_history_status(history_id, "Failed (Cannot download ref audio)")
+                        return None, "Failed to download reference audio from Drive."
+                    
+                    res_audio, res_status = _gen(
                         text,
                         lang,
-                        ref_aud,
+                        ref_audio_path,
                         None,
                         ns,
                         gs,
@@ -371,14 +406,23 @@ by Xiaomi Next-gen Kaldi team.
                         mode="clone",
                         ref_text=ref_text or None,
                     )
+                    
+                    if res_audio:
+                        # res_audio is (sampling_rate, waveform)
+                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_out:
+                            sf.write(tmp_out.name, res_audio[1], res_audio[0])
+                            db.update_history_status(history_id, "Success", tmp_out.name)
+                    else:
+                        db.update_history_status(history_id, f"Failed ({res_status})")
+                        
+                    return res_audio, res_status
 
                 vc_btn.click(
                     _clone_fn,
                     inputs=[
                         vc_text,
                         vc_lang,
-                        vc_ref_audio,
-                        vc_ref_text,
+                        vc_clone_dropdown,
                         vc_ns,
                         vc_gs,
                         vc_dn,
@@ -391,7 +435,146 @@ by Xiaomi Next-gen Kaldi team.
                 )
 
             # ==============================================================
-            # Voice Design
+            # Trang quản lý voice clone
+            # ==============================================================
+            with gr.TabItem("Quản lý Voice Clone"):
+                gr.Markdown("### Create and Manage Voice Clones")
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        new_clone_name = gr.Textbox(label="Clone Name / Tên Voice")
+                        new_clone_audio = gr.Audio(label="Reference Audio / File ghi âm", type="filepath")
+                        new_clone_text = gr.Textbox(label="Reference Text / Văn bản mẫu (Optional)", lines=2)
+                        add_clone_btn = gr.Button("Add Voice Clone / Thêm Voice", variant="primary")
+                        add_clone_status = gr.Textbox(label="Status", interactive=False)
+                    
+                    with gr.Column(scale=2):
+                        clones_df_ui = gr.Dataframe(label="Existing Voice Clones")
+                        refresh_clones_btn = gr.Button("Refresh List")
+                        
+                        delete_clone_id = gr.Textbox(label="Enter ID to delete / Nhập ID để xóa")
+                        delete_clone_btn = gr.Button("Delete Voice Clone", variant="stop")
+                        delete_clone_status = gr.Textbox(label="Delete Status", interactive=False)
+
+                def load_clones_df():
+                    if not db.initialized:
+                        return pd.DataFrame()
+                    return db.get_voice_clones()
+
+                def handle_add_clone(name, audio_path, text):
+                    if not db.initialized:
+                        return "DB not initialized.", load_clones_df()
+                    if not name or not audio_path:
+                        return "Name and Audio are required.", load_clones_df()
+                    db.add_voice_clone(name, audio_path, text)
+                    return "Success", load_clones_df()
+                
+                def handle_delete_clone(clone_id):
+                    if not db.initialized:
+                        return "DB not initialized.", load_clones_df()
+                    if db.delete_voice_clone(clone_id):
+                        return "Deleted successfully", load_clones_df()
+                    return "ID not found or failed to delete", load_clones_df()
+
+                add_clone_btn.click(
+                    handle_add_clone,
+                    inputs=[new_clone_name, new_clone_audio, new_clone_text],
+                    outputs=[add_clone_status, clones_df_ui]
+                )
+                refresh_clones_btn.click(fn=load_clones_df, inputs=[], outputs=[clones_df_ui])
+                delete_clone_btn.click(
+                    handle_delete_clone,
+                    inputs=[delete_clone_id],
+                    outputs=[delete_clone_status, clones_df_ui]
+                )
+                demo.load(fn=load_clones_df, inputs=[], outputs=[clones_df_ui])
+
+            # ==============================================================
+            # Trang quản lý lịch sử tạo voice
+            # ==============================================================
+            with gr.TabItem("Quản lý Lịch sử"):
+                gr.Markdown("### Generation History / Lịch sử tạo voice")
+                history_df_ui = gr.Dataframe(label="History Records")
+                refresh_history_btn = gr.Button("Refresh History")
+                
+                with gr.Row():
+                    history_action_id = gr.Textbox(label="History ID for Action")
+                with gr.Row():
+                    history_download_btn = gr.Button("Download Generated Audio", variant="primary")
+                    history_delete_btn = gr.Button("Delete Record", variant="stop")
+                    history_retry_btn = gr.Button("Regenerate", variant="secondary")
+                
+                history_action_status = gr.Textbox(label="Action Status", interactive=False)
+                history_audio_output = gr.Audio(label="Downloaded Audio", type="filepath")
+
+                def load_history_df():
+                    if not db.initialized:
+                        return pd.DataFrame()
+                    return db.get_history()
+
+                def handle_download_history(hist_id):
+                    if not db.initialized:
+                        return "DB not initialized.", None
+                    df = db.get_history()
+                    row = df[df["ID"] == hist_id]
+                    if row.empty:
+                        return "History ID not found.", None
+                    audio_id = row.iloc[0].get("Output Audio Drive ID")
+                    if not audio_id:
+                        return "No audio generated for this record.", None
+                    
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_out:
+                        output_path = tmp_out.name
+                    success = db.download_audio(audio_id, output_path)
+                    if success:
+                        return "Downloaded successfully.", output_path
+                    return "Failed to download.", None
+
+                def handle_delete_history(hist_id):
+                    if not db.initialized:
+                        return "DB not initialized.", load_history_df()
+                    if db.delete_history(hist_id):
+                        return "Deleted successfully", load_history_df()
+                    return "ID not found or failed to delete", load_history_df()
+
+                def handle_regenerate_history(hist_id):
+                    if not db.initialized:
+                        return "DB not initialized.", load_history_df()
+                    df = db.get_history()
+                    row = df[df["ID"] == hist_id]
+                    if row.empty:
+                        return "History ID not found.", load_history_df()
+                    
+                    text = row.iloc[0]["Text"]
+                    clone_name = row.iloc[0]["Voice Clone Used"]
+                    
+                    res_audio, res_status = _clone_fn(
+                        text, "Auto", clone_name, 32, 2.0, True, 1.0, None, True, True
+                    )
+                    if res_audio:
+                        return "Regenerated successfully", load_history_df()
+                    else:
+                        return f"Regeneration failed: {res_status}", load_history_df()
+
+                refresh_history_btn.click(fn=load_history_df, inputs=[], outputs=[history_df_ui])
+                history_download_btn.click(
+                    handle_download_history,
+                    inputs=[history_action_id],
+                    outputs=[history_action_status, history_audio_output]
+                )
+                history_delete_btn.click(
+                    handle_delete_history,
+                    inputs=[history_action_id],
+                    outputs=[history_action_status, history_df_ui]
+                )
+                history_retry_btn.click(
+                    handle_regenerate_history,
+                    inputs=[history_action_id],
+                    outputs=[history_action_status, history_df_ui]
+                )
+                demo.load(fn=load_history_df, inputs=[], outputs=[history_df_ui])
+
+            # ==============================================================
+            # Voice Design (Original)
             # ==============================================================
             with gr.TabItem("Voice Design"):
                 with gr.Row():
@@ -433,11 +616,6 @@ by Xiaomi Next-gen Kaldi team.
                         vd_status = gr.Textbox(label="Status / 状态", lines=2)
 
                 def _build_instruct(groups):
-                    """Extract instruct text from UI dropdowns.
-
-                    Language unification and validation is handled by
-                    _resolve_instruct inside _preprocess_all.
-                    """
                     selected = [g for g in groups if g and g != "Auto"]
                     if not selected:
                         return None
@@ -445,7 +623,6 @@ by Xiaomi Next-gen Kaldi team.
                     for v in selected:
                         if " / " in v:
                             en, zh = v.split(" / ", 1)
-                            # Dialects have no English equivalent
                             if "Dialect" in v.split(" / ")[0]:
                                 parts.append(zh.strip())
                             else:
