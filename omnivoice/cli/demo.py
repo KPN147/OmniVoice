@@ -60,53 +60,53 @@ _ALL_LANGUAGES = ["Auto"] + sorted(lang_display_name(n) for n in LANG_NAMES)
 # Each option is displayed as "English / 中文".
 # The model expects English for accents and Chinese for dialects.
 _CATEGORIES = {
-    "Gender / 性别": ["Male / 男", "Female / 女"],
-    "Age / 年龄": [
-        "Child / 儿童",
-        "Teenager / 少年",
-        "Young Adult / 青年",
-        "Middle-aged / 中年",
-        "Elderly / 老年",
+    "Gender ": ["Male ", "Female "],
+    "Age ": [
+        "Child ",
+        "Teenager ",
+        "Young Adult ",
+        "Middle-aged ",
+        "Elderly ",
     ],
-    "Pitch / 音调": [
-        "Very Low Pitch / 极低音调",
-        "Low Pitch / 低音调",
-        "Moderate Pitch / 中音调",
-        "High Pitch / 高音调",
-        "Very High Pitch / 极高音调",
+    "Pitch ": [
+        "Very Low Pitch ",
+        "Low Pitch ",
+        "Moderate Pitch ",
+        "High Pitch ",
+        "Very High Pitch ",
     ],
-    "Style / 风格": ["Whisper / 耳语"],
-    "English Accent / 英文口音": [
-        "American Accent / 美式口音",
-        "Australian Accent / 澳大利亚口音",
-        "British Accent / 英国口音",
-        "Chinese Accent / 中国口音",
-        "Canadian Accent / 加拿大口音",
-        "Indian Accent / 印度口音",
-        "Korean Accent / 韩国口音",
-        "Portuguese Accent / 葡萄牙口音",
-        "Russian Accent / 俄罗斯口音",
-        "Japanese Accent / 日本口音",
+    "Style ": ["Whisper "],
+    "English Accent ": [
+        "American Accent",
+        "Australian Accent ",
+        "British Accent ",
+        "Chinese Accent ",
+        "Canadian Accent ",
+        "Indian Accent ",
+        "Korean Accent ",
+        "Portuguese Accent ",
+        "Russian Accent ",
+        "Japanese Accent ",
     ],
-    "Chinese Dialect / 中文方言": [
-        "Henan Dialect / 河南话",
-        "Shaanxi Dialect / 陕西话",
-        "Sichuan Dialect / 四川话",
-        "Guizhou Dialect / 贵州话",
-        "Yunnan Dialect / 云南话",
-        "Guilin Dialect / 桂林话",
-        "Jinan Dialect / 济南话",
-        "Shijiazhuang Dialect / 石家庄话",
-        "Gansu Dialect / 甘肃话",
-        "Ningxia Dialect / 宁夏话",
-        "Qingdao Dialect / 青岛话",
-        "Northeast Dialect / 东北话",
+    "Chinese Dialect ": [
+        "Henan Dialect ",
+        "Shaanxi Dialect ",
+        "Sichuan Dialect ",
+        "Guizhou Dialect ",
+        "Yunnan Dialect",
+        "Guilin Dialect ",
+        "Jinan Dialect ",
+        "Shijiazhuang Dialect ",
+        "Gansu Dialect ",
+        "Ningxia Dialect ",
+        "Qingdao Dialect ",
+        "Northeast Dialect ",
     ],
 }
 
 _ATTR_INFO = {
-    "English Accent / 英文口音": "Only effective for English speech.",
-    "Chinese Dialect / 中文方言": "Only effective for Chinese speech.",
+    "English Accent ": "Only effective for English speech.",
+    "Chinese Dialect ": "Only effective for Chinese speech.",
 }
 
 # ---------------------------------------------------------------------------
@@ -234,7 +234,7 @@ def build_demo(
     """
 
     # Reusable: language dropdown component
-    def _lang_dropdown(label="Language (optional) / 语种 (可选)", value="Auto"):
+    def _lang_dropdown(label="Language (optional)", value="Auto"):
         return gr.Dropdown(
             label=label,
             choices=_ALL_LANGUAGES,
@@ -328,7 +328,7 @@ by Xiaomi Next-gen Kaldi team.
                 with gr.Row():
                     with gr.Column(scale=1):
                         vc_text = gr.Textbox(
-                            label="Text to Synthesize / 待合成文本",
+                            label="Text to Synthesize",
                             lines=4,
                             placeholder="Enter the text you want to synthesize...",
                         )
@@ -339,7 +339,7 @@ by Xiaomi Next-gen Kaldi team.
                         )
                         vc_refresh_clones_btn = gr.Button("Refresh Voice Clones / Tải lại danh sách")
                         
-                        vc_lang = _lang_dropdown("Language (optional) / 语种 (可选)")
+                        vc_lang = _lang_dropdown("Language (optional)")
                         (
                             vc_ns,
                             vc_gs,
@@ -349,13 +349,13 @@ by Xiaomi Next-gen Kaldi team.
                             vc_pp,
                             vc_po,
                         ) = _gen_settings()
-                        vc_btn = gr.Button("Generate / 生成", variant="primary")
+                        vc_btn = gr.Button("Generate ", variant="primary")
                     with gr.Column(scale=1):
                         vc_audio = gr.Audio(
-                            label="Output Audio / 合成结果",
+                            label="Output Audio ",
                             type="numpy",
                         )
-                        vc_status = gr.Textbox(label="Status / 状态", lines=2)
+                        vc_status = gr.Textbox(label="Status ", lines=2)
 
                 def _refresh_choices():
                     return gr.update(choices=get_voice_clone_choices())
@@ -580,7 +580,7 @@ by Xiaomi Next-gen Kaldi team.
                 with gr.Row():
                     with gr.Column(scale=1):
                         vd_text = gr.Textbox(
-                            label="Text to Synthesize / 待合成文本",
+                            label="Text to Synthesize ",
                             lines=4,
                             placeholder="Enter the text you want to synthesize...",
                         )
@@ -607,13 +607,13 @@ by Xiaomi Next-gen Kaldi team.
                             vd_pp,
                             vd_po,
                         ) = _gen_settings()
-                        vd_btn = gr.Button("Generate / 生成", variant="primary")
+                        vd_btn = gr.Button("Generate ", variant="primary")
                     with gr.Column(scale=1):
                         vd_audio = gr.Audio(
-                            label="Output Audio / 合成结果",
+                            label="Output Audio",
                             type="numpy",
                         )
-                        vd_status = gr.Textbox(label="Status / 状态", lines=2)
+                        vd_status = gr.Textbox(label="Status ", lines=2)
 
                 def _build_instruct(groups):
                     selected = [g for g in groups if g and g != "Auto"]

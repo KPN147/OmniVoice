@@ -15,7 +15,7 @@ class OmniVoiceDB:
 
         if base_dir is None:
             if IN_COLAB:
-                self.base_dir = "/content/drive/MyDrive/Omini Voice"
+                self.base_dir = "/content/drive/MyDrive/OminiVoiceDB"
             else:
                 self.base_dir = "Omini_Voice_DB"
         else:
