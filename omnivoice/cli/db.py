@@ -8,18 +8,16 @@ class OmniVoiceDB:
     def __init__(self, base_dir=None):
         # Determine the base directory
         try:
-            import google.colab
             IN_COLAB = True
-        except ImportError:
-            IN_COLAB = False
-
-        if base_dir is None:
-            if IN_COLAB:
-                self.base_dir = "/content/drive/MyDrive/OminiVoiceDB"
-            else:
-                self.base_dir = "Omini_Voice_DB"
+            from google.colab import drive
+            drive.mount('/content/drive')
+            mount_drive = True
+        except:
+            mount_drive = False
+        if mount_drive:
+            self.base_dir = "/content/drive/MyDrive/OminiVoiceDB"
         else:
-            self.base_dir = base_dir
+            self.base_dir = "Omini_Voice_DB"
 
         self.audio_dir = os.path.join(self.base_dir, "audios")
         self.clones_csv = os.path.join(self.base_dir, "VoiceClones.csv")
