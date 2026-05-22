@@ -6,18 +6,24 @@ import pandas as pd
 
 class OmniVoiceDB:
     def __init__(self, base_dir=None):
-        # Determine the base directory
-        try:
-            IN_COLAB = True
-            from google.colab import drive
-            drive.mount('/content/drive')
-            mount_drive = True
-        except:
-            mount_drive = False
-        if mount_drive:
-            self.base_dir = "/content/drive/MyDrive/OminiVoiceDB"
+    #     # Determine the base directory
+    #     try:
+    #         IN_COLAB = True
+    #         from google.colab import drive
+    #         drive.mount('/content/drive')
+    #         mount_drive = True
+    #     except:
+    #         mount_drive = False
+    #     if mount_drive:
+    #         self.base_dir = "/content/drive/MyDrive/OminiVoiceDB"
+    #     else:
+    #         self.base_dir = "Omini_Voice_DB"
+        if os.path.exists('/content/drive/MyDrive'):
+                self.base_dir = "/content/drive/MyDrive/OminiVoiceDB"
+                print("Google Drive found! Saving to Google Drive.")
         else:
             self.base_dir = "Omini_Voice_DB"
+            print("Google Drive NOT found. Saving locally.")
 
         self.audio_dir = os.path.join(self.base_dir, "audios")
         self.clones_csv = os.path.join(self.base_dir, "VoiceClones.csv")
