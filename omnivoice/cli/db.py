@@ -87,7 +87,7 @@ class OmniVoiceDB:
             "Created At": created_at
         }
         
-        df = pd.read_csv(self.clones_csv)
+        df = pd.read_csv(self.clones_csv, dtype=str)
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
         df.to_csv(self.clones_csv, index=False)
         return clone_id
@@ -95,12 +95,12 @@ class OmniVoiceDB:
     def get_voice_clones(self):
         if not os.path.exists(self.clones_csv):
             return pd.DataFrame(columns=["ID", "Name", "Ref Audio Drive ID", "Ref Text", "Created At"])
-        return pd.read_csv(self.clones_csv).fillna("")
+        return pd.read_csv(self.clones_csv, dtype=str).fillna("")
     
     def delete_voice_clone(self, clone_id):
         if not os.path.exists(self.clones_csv):
             return False
-        df = pd.read_csv(self.clones_csv)
+        df = pd.read_csv(self.clones_csv, dtype=str)
         clone_id = str(clone_id)
         
         mask = df["ID"].astype(str) == clone_id
@@ -137,7 +137,7 @@ class OmniVoiceDB:
             "Created At": created_at
         }
         
-        df = pd.read_csv(self.history_csv)
+        df = pd.read_csv(self.history_csv, dtype=str)
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
         df.to_csv(self.history_csv, index=False)
         return history_id
@@ -145,12 +145,12 @@ class OmniVoiceDB:
     def get_history(self):
         if not os.path.exists(self.history_csv):
             return pd.DataFrame(columns=["ID", "Text", "Voice Clone Used", "Status", "Output Audio Drive ID", "Created At"])
-        return pd.read_csv(self.history_csv).fillna("")
+        return pd.read_csv(self.history_csv, dtype=str).fillna("")
 
     def update_history_status(self, history_id, status, audio_path=None):
         if not os.path.exists(self.history_csv):
             return False
-        df = pd.read_csv(self.history_csv)
+        df = pd.read_csv(self.history_csv, dtype=str)
         history_id = str(history_id)
         
         mask = df["ID"].astype(str) == history_id
@@ -170,7 +170,7 @@ class OmniVoiceDB:
     def delete_history(self, history_id):
         if not os.path.exists(self.history_csv):
             return False
-        df = pd.read_csv(self.history_csv)
+        df = pd.read_csv(self.history_csv, dtype=str)
         history_id = str(history_id)
         
         mask = df["ID"].astype(str) == history_id
