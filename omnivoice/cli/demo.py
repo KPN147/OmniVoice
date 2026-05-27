@@ -352,10 +352,20 @@ def build_demo(
                             vc_pp,
                             vc_po,
                         ) = _gen_settings()
-                        vc_btn = gr.Button("Tạo ", variant="primary")
+                        with gr.Row():
+                            vc_add_btn = gr.Button("Thêm vào DS chờ", variant="secondary")
+                            vc_start_btn = gr.Button("Bắt đầu xử lý", variant="primary")
+                            vc_clear_btn = gr.Button("Xóa DS", variant="stop")
                     with gr.Column(scale=1):
+                        vc_queue_state = gr.State([])
+                        vc_queue_df = gr.Dataframe(
+                            headers=["STT", "Văn bản (rút gọn)", "Voice Clone", "Trạng thái"],
+                            datatype=["number", "str", "str", "str"],
+                            label="Danh sách chờ xử lý",
+                            interactive=False,
+                        )
                         vc_audio = gr.Audio(
-                            label="Âm thanh đầu ra ",
+                            label="Âm thanh đầu ra (File mới nhất)",
                             type="filepath",
                         )
                         vc_status = gr.Textbox(label="Trạng thái ", lines=2)
@@ -364,6 +374,15 @@ def build_demo(
                     return gr.update(choices=get_voice_clone_choices())
                 
                 vc_refresh_clones_btn.click(fn=_refresh_choices, inputs=[], outputs=[vc_clone_dropdown])
+                
+                def get_queue_df(q_state):
+                    rows = []
+                    for i, q in enumerate(q_state):
+                        short_text = q["text"][:30] + "..." if len(q["text"]) > 30 else q["text"]
+                        rows.append([i+1, short_text, q["clone_name"], q["status"]])
+                    if not rows:
+                        return pd.DataFrame(columns=["STT", "Văn bản (rút gọn)", "Voice Clone", "Trạng thái"])
+                    return pd.DataFrame(rows, columns=["STT", "Văn bản (rút gọn)", "Voice Clone", "Trạng thái"])
 
                 def _clone_fn(
                     text, lang, clone_name, ns, gs, dn, sp, du, pp, po
@@ -449,21 +468,63 @@ def build_demo(
                         
                     return res_audio, res_status
 
-                vc_btn.click(
-                    _clone_fn,
-                    inputs=[
-                        vc_text,
-                        vc_lang,
-                        vc_clone_dropdown,
-                        vc_ns,
-                        vc_gs,
-                        vc_dn,
-                        vc_sp,
-                        vc_du,
-                        vc_pp,
-                        vc_po,
-                    ],
-                    outputs=[vc_audio, vc_status],
+                def _add_to_queue(text, lang, clone_name, q_state):
+                    if not clone_name:
+                        return q_state, get_queue_df(q_state), "Vui lòng chọn Voice Clone."
+                    if not text or not text.strip():
+                        return q_state, get_queue_df(q_state), "Vui lòng nhập văn bản."
+                    q_state.append({
+                        "text": text,
+                        "lang": lang,
+                        "clone_name": clone_name,
+                        "status": "Chờ xử lý"
+                    })
+                    return q_state, get_queue_df(q_state), f"Đã thêm vào danh sách (tổng {len(q_state)} task)."
+
+                vc_add_btn.click(
+                    _add_to_queue,
+                    inputs=[vc_text, vc_lang, vc_clone_dropdown, vc_queue_state],
+                    outputs=[vc_queue_state, vc_queue_df, vc_status]
+                )
+
+                def _clear_queue():
+                    return [], get_queue_df([]), "Đã xóa danh sách."
+                
+                vc_clear_btn.click(
+                    _clear_queue,
+                    inputs=[],
+                    outputs=[vc_queue_state, vc_queue_df, vc_status]
+                )
+
+                def _process_queue(q_state, ns, gs, dn, sp, du, pp, po):
+                    if not q_state:
+                        yield q_state, get_queue_df(q_state), None, "Danh sách rỗng."
+                        return
+                    
+                    last_audio = None
+                    total_tasks = len(q_state)
+                    
+                    for i, task in enumerate(q_state):
+                        if task["status"] in ["Chờ xử lý", "Lỗi"]:
+                            task["status"] = "Đang xử lý..."
+                            yield q_state, get_queue_df(q_state), last_audio, f"Đang xử lý task {i+1}/{total_tasks}..."
+                            
+                            res_audio, res_status = _clone_fn(
+                                task["text"], task["lang"], task["clone_name"], ns, gs, dn, sp, du, pp, po
+                            )
+                            
+                            if res_audio:
+                                task["status"] = "Xong"
+                                last_audio = res_audio
+                            else:
+                                task["status"] = "Lỗi"
+                            
+                            yield q_state, get_queue_df(q_state), last_audio, f"Hoàn thành task {i+1}/{total_tasks}: {res_status}"
+
+                vc_start_btn.click(
+                    _process_queue,
+                    inputs=[vc_queue_state, vc_ns, vc_gs, vc_dn, vc_sp, vc_du, vc_pp, vc_po],
+                    outputs=[vc_queue_state, vc_queue_df, vc_audio, vc_status]
                 )
 
             # ==============================================================
