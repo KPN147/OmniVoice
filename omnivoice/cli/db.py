@@ -56,7 +56,7 @@ class OmniVoiceDB:
         
         ext = os.path.splitext(file_path)[1]
         # Keep original extension, use name or generate uuid
-        if not name.endswith(ext) and not name.endswith('.wav'):
+        if not name.endswith(ext) and not name.endswith('.wav') and not name.endswith('.mp3'):
             name += ext
         
         dest_path = os.path.join(self.audio_dir, name)
@@ -123,7 +123,7 @@ class OmniVoiceDB:
     def add_history(self, text, clone_name, status, audio_path=None):
         audio_id = ""
         if audio_path and status == "Success":
-            audio_id = self.upload_audio(audio_path, f"generated_{uuid.uuid4().hex[:8]}.wav")
+            audio_id = self.upload_audio(audio_path, f"generated_{uuid.uuid4().hex[:8]}.mp3")
             
         history_id = str(uuid.uuid4())
         created_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -161,7 +161,7 @@ class OmniVoiceDB:
         df.at[idx, "Status"] = status
         
         if audio_path and status == "Success":
-            audio_id = self.upload_audio(audio_path, f"generated_{uuid.uuid4().hex[:8]}.wav")
+            audio_id = self.upload_audio(audio_path, f"generated_{uuid.uuid4().hex[:8]}.mp3")
             df.at[idx, "Output Audio Drive ID"] = audio_id
             
         df.to_csv(self.history_csv, index=False)

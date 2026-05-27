@@ -384,7 +384,7 @@ def run_inference_batch(
 
     results = []
     for save_name, audio in zip(save_names, audios):
-        save_path = os.path.join(res_dir, save_name + ".wav")
+        save_path = os.path.join(res_dir, save_name + ".mp3")
         torchaudio.save(save_path, audio, worker_model.sampling_rate)
         audio_duration = audio.shape[-1] / worker_model.sampling_rate
         results.append(

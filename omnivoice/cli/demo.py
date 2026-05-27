@@ -409,7 +409,7 @@ by Xiaomi Next-gen Kaldi team.
                     
                     if res_audio:
                         # res_audio is (sampling_rate, waveform)
-                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_out:
+                        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_out:
                             sf.write(tmp_out.name, res_audio[1], res_audio[0])
                             db.update_history_status(history_id, "Success", tmp_out.name)
                     else:
@@ -522,7 +522,7 @@ by Xiaomi Next-gen Kaldi team.
                     if not audio_id:
                         return "No audio generated for this record.", None
                     
-                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_out:
+                    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_out:
                         output_path = tmp_out.name
                     success = db.download_audio(audio_id, output_path)
                     if success:

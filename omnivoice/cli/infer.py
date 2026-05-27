@@ -7,16 +7,16 @@ Usage:
     # Voice cloning
     omnivoice-infer --model k2-fsa/OmniVoice \
         --text "Hello, this is a text for text-to-speech." \
-        --ref_audio ref.wav --ref_text "Reference transcript." --output out.wav
+        --ref_audio ref.wav --ref_text "Reference transcript." --output out.mp3
 
     # Voice design
     omnivoice-infer --model k2-fsa/OmniVoice \
         --text "Hello, this is a text for text-to-speech." \
-        --instruct "male, British accent" --output out.wav
+        --instruct "male, British accent" --output out.mp3
 
     # Auto voice
     omnivoice-infer --model k2-fsa/OmniVoice \
-        --text "Hello, this is a text for text-to-speech." --output out.wav
+        --text "Hello, this is a text for text-to-speech." --output out.mp3
 """
 
 import argparse
@@ -58,8 +58,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=str,
-        required=True,
-        help="Output WAV file path.",
+        help="Output audio file path.",
     )
     # Voice cloning
     parser.add_argument(

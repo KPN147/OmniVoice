@@ -131,7 +131,7 @@ audio = model.generate(
 # If you don't want to input `ref_text` manually, you can directly omit the `ref_text`.
 # The model will use Whisper ASR to auto-transcribe it.
 
-torchaudio.save("out.wav", audio[0], 24000)
+torchaudio.save("out.mp3", audio[0], 24000)
 ```
 
 ### Voice Design
@@ -229,19 +229,19 @@ omnivoice-infer \
     --text "This is a test for text to speech." \
     --ref_audio ref.wav \
     --ref_text "Transcription of the reference audio." \
-    --output hello.wav
+    --output hello.mp3
 
 # Voice Design
 omnivoice-infer --model k2-fsa/OmniVoice \
     --text "This is a test for text to speech." \
     --instruct "male, British accent" \
-    --output hello.wav
+    --output hello.mp3
 
 # Auto Voice
 omnivoice-infer \
     --model k2-fsa/OmniVoice \
     --text "This is a test for text to speech."\
-    --output hello.wav
+    --output hello.mp3
 ```
 
 ### Batch Inference
