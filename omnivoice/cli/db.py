@@ -147,7 +147,7 @@ class OmniVoiceDB:
             return pd.DataFrame(columns=["ID", "Text", "Voice Clone Used", "Status", "Output Audio Drive ID", "Created At"])
         return pd.read_csv(self.history_csv, dtype=str).fillna("")
 
-    def update_history_status(self, history_id, status, audio_path=None):
+    def update_history_status(self, history_id, status, audio_path=None, custom_filename=None):
         if not os.path.exists(self.history_csv):
             return False
         df = pd.read_csv(self.history_csv, dtype=str)
@@ -161,7 +161,13 @@ class OmniVoiceDB:
         df.at[idx, "Status"] = status
         
         if audio_path and status == "Success":
-            audio_id = self.upload_audio(audio_path, f"generated_{uuid.uuid4().hex[:8]}.mp3")
+            if custom_filename:
+                fname = custom_filename
+                if not fname.endswith(".mp3"):
+                    fname += ".mp3"
+            else:
+                fname = f"generated_{uuid.uuid4().hex[:8]}.mp3"
+            audio_id = self.upload_audio(audio_path, fname)
             df.at[idx, "Output Audio Drive ID"] = audio_id
             
         df.to_csv(self.history_csv, index=False)

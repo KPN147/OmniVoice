@@ -335,6 +335,11 @@ def build_demo(
                             lines=4,
                             placeholder="Nhập văn bản bạn muốn tổng hợp...",
                         )
+                        vc_filename = gr.Textbox(
+                            label="Tên file lưu (Tuỳ chọn)",
+                            lines=1,
+                            placeholder="Nhập tên file (VD: bai_hoc_1)...",
+                        )
                         vc_clone_dropdown = gr.Dropdown(
                             label="Chọn Voice Clone",
                             choices=get_voice_clone_choices(),
@@ -359,8 +364,8 @@ def build_demo(
                     with gr.Column(scale=1):
                         vc_queue_state = gr.State([])
                         vc_queue_df = gr.Dataframe(
-                            headers=["STT", "Văn bản (rút gọn)", "Voice Clone", "Trạng thái"],
-                            datatype=["number", "str", "str", "str"],
+                            headers=["STT", "Tên file", "Văn bản (rút gọn)", "Voice Clone", "Trạng thái"],
+                            datatype=["number", "str", "str", "str", "str"],
                             label="Danh sách chờ xử lý",
                             interactive=False,
                         )
@@ -379,13 +384,13 @@ def build_demo(
                     rows = []
                     for i, q in enumerate(q_state):
                         short_text = q["text"][:30] + "..." if len(q["text"]) > 30 else q["text"]
-                        rows.append([i+1, short_text, q["clone_name"], q["status"]])
+                        rows.append([i+1, q.get("filename", ""), short_text, q["clone_name"], q["status"]])
                     if not rows:
-                        return pd.DataFrame(columns=["STT", "Văn bản (rút gọn)", "Voice Clone", "Trạng thái"])
-                    return pd.DataFrame(rows, columns=["STT", "Văn bản (rút gọn)", "Voice Clone", "Trạng thái"])
+                        return pd.DataFrame(columns=["STT", "Tên file", "Văn bản (rút gọn)", "Voice Clone", "Trạng thái"])
+                    return pd.DataFrame(rows, columns=["STT", "Tên file", "Văn bản (rút gọn)", "Voice Clone", "Trạng thái"])
 
                 def _clone_fn(
-                    text, lang, clone_name, ns, gs, dn, sp, du, pp, po
+                    text, lang, clone_name, custom_filename, ns, gs, dn, sp, du, pp, po
                 ):
                     if not db.initialized:
                         return None, "Database not initialized. Check credentials."
@@ -453,22 +458,32 @@ def build_demo(
                         import torchaudio as _ta
                         audio = model.generate(**kw)
                         t1 = time.time()
-                        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_out:
-                            _ta.save(tmp_out.name, audio[0], sampling_rate)
-                        res_audio = tmp_out.name
+                        if custom_filename:
+                            import os
+                            os.makedirs("outputs", exist_ok=True)
+                            fname = custom_filename
+                            if not fname.endswith(".mp3"):
+                                fname += ".mp3"
+                            out_path = os.path.join("outputs", fname)
+                            _ta.save(out_path, audio[0], sampling_rate)
+                            res_audio = out_path
+                        else:
+                            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_out:
+                                _ta.save(tmp_out.name, audio[0], sampling_rate)
+                            res_audio = tmp_out.name
                         res_status = f"Thành công! Thời gian xử lý model: {t1 - t0:.1f} giây."
                     except Exception as e:
                         res_audio = None
                         res_status = f"Lỗi: {type(e).__name__}: {e}"
                     
                     if res_audio:
-                        db.update_history_status(history_id, "Success", res_audio)
+                        db.update_history_status(history_id, "Success", res_audio, custom_filename=custom_filename)
                     else:
                         db.update_history_status(history_id, f"Failed ({res_status})")
                         
                     return res_audio, res_status
 
-                def _add_to_queue(text, lang, clone_name, q_state):
+                def _add_to_queue(text, lang, clone_name, custom_filename, q_state):
                     if not clone_name:
                         return q_state, get_queue_df(q_state), "Vui lòng chọn Voice Clone."
                     if not text or not text.strip():
@@ -477,13 +492,14 @@ def build_demo(
                         "text": text,
                         "lang": lang,
                         "clone_name": clone_name,
+                        "filename": custom_filename.strip() if custom_filename else "",
                         "status": "Chờ xử lý"
                     })
                     return q_state, get_queue_df(q_state), f"Đã thêm vào danh sách (tổng {len(q_state)} task)."
 
                 vc_add_btn.click(
                     _add_to_queue,
-                    inputs=[vc_text, vc_lang, vc_clone_dropdown, vc_queue_state],
+                    inputs=[vc_text, vc_lang, vc_clone_dropdown, vc_filename, vc_queue_state],
                     outputs=[vc_queue_state, vc_queue_df, vc_status]
                 )
 
@@ -510,7 +526,7 @@ def build_demo(
                             yield q_state, get_queue_df(q_state), last_audio, f"Đang xử lý task {i+1}/{total_tasks}..."
                             
                             res_audio, res_status = _clone_fn(
-                                task["text"], task["lang"], task["clone_name"], ns, gs, dn, sp, du, pp, po
+                                task["text"], task["lang"], task["clone_name"], task.get("filename", ""), ns, gs, dn, sp, du, pp, po
                             )
                             
                             if res_audio:
