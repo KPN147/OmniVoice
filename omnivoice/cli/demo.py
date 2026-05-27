@@ -157,6 +157,10 @@ def build_demo(
     sampling_rate = model.sampling_rate
     db = OmniVoiceDB()
 
+    # Cache VoiceClonePrompt theo tên clone để tránh chạy lại ASR + tokenize
+    # mỗi lần nhấn Generate với cùng một giọng nói mẫu.
+    _voice_prompt_cache: dict = {}
+
     # -- shared generation core --
     def _gen_core(
         text,
@@ -177,11 +181,13 @@ def build_demo(
             return None, "Please enter the text to synthesize."
 
         gen_config = OmniVoiceGenerationConfig(
-            num_step=int(num_step or 32),
+            num_step=int(num_step or 16),
             guidance_scale=float(guidance_scale) if guidance_scale is not None else 2.0,
             denoise=bool(denoise) if denoise is not None else True,
             preprocess_prompt=bool(preprocess_prompt),
             postprocess_output=bool(postprocess_output),
+            audio_chunk_duration=12.0,   # chunk ngắn hơn → mỗi forward pass nhẹ hơn
+            audio_chunk_threshold=20.0,  # chia chunk sớm hơn → tránh sequence dài
         )
 
         lang = language if (language and language != "Auto") else None
@@ -198,10 +204,14 @@ def build_demo(
         if mode == "clone":
             if not ref_audio:
                 return None, "Please upload a reference audio."
-            kw["voice_clone_prompt"] = model.create_voice_clone_prompt(
-                ref_audio=ref_audio,
-                ref_text=ref_text,
-            )
+            # Dùng cache key kết hợp path + ref_text để tránh tạo lại
+            cache_key = (ref_audio, ref_text)
+            if cache_key not in _voice_prompt_cache:
+                _voice_prompt_cache[cache_key] = model.create_voice_clone_prompt(
+                    ref_audio=ref_audio,
+                    ref_text=ref_text,
+                )
+            kw["voice_clone_prompt"] = _voice_prompt_cache[cache_key]
 
         if mode == "design":
             if instruct and instruct.strip():
@@ -235,66 +245,65 @@ def build_demo(
     """
 
     # Reusable: language dropdown component
-    def _lang_dropdown(label="Language (optional)", value="Auto"):
+    def _lang_dropdown(label="Ngôn ngữ (Tuỳ chọn)", value="Auto"):
         return gr.Dropdown(
             label=label,
             choices=_ALL_LANGUAGES,
             value=value,
             allow_custom_value=False,
             interactive=True,
-            info="Keep as Auto to auto-detect the language.",
+            info="Để Auto để tự động phát hiện ngôn ngữ.",
         )
 
     # Reusable: optional generation settings accordion
     def _gen_settings():
-        with gr.Accordion("Generation Settings (optional)", open=False):
+        with gr.Accordion("Cài đặt sinh giọng (Tuỳ chọn)", open=False):
             sp = gr.Slider(
                 0.7,
                 1.3,
                 value=1.0,
                 step=0.05,
-                label="Speed",
-                info="1.0 = normal. >1 faster, <1 slower. Ignored if Duration is set.",
+                label="Tốc độ",
+                info="1.0 = bình thường. >1 nhanh hơn, <1 chậm hơn. Sẽ bị bỏ qua nếu thiết lập Thời lượng.",
             )
             du = gr.Number(
                 value=None,
-                label="Duration (seconds)",
+                label="Thời lượng (giây)",
                 info=(
-                    "Leave empty to use speed."
-                    " Set a fixed duration to override speed."
+                    "Để trống để sử dụng Tốc độ. "
+                    "Đặt thời lượng cố định để ghi đè Tốc độ."
                 ),
             )
             ns = gr.Slider(
                 4,
                 64,
-                value=32,
+                value=16,
                 step=1,
-                label="Inference Steps",
-                info="Default: 32. Lower = faster, higher = better quality.",
+                label="Số bước (Inference Steps)",
+                info="Mặc định: 16 (nhanh hơn). Tăng lên 32 để chất lượng tốt hơn.",
             )
             dn = gr.Checkbox(
-                label="Denoise",
+                label="Khử nhiễu",
                 value=True,
-                info="Default: enabled. Uncheck to disable denoising.",
+                info="Mặc định: bật. Bỏ chọn để tắt khử nhiễu.",
             )
             gs = gr.Slider(
                 0.0,
                 4.0,
                 value=2.0,
                 step=0.1,
-                label="Guidance Scale (CFG)",
-                info="Default: 2.0.",
+                label="Mức độ hướng dẫn (CFG)",
+                info="Mặc định: 2.0.",
             )
             pp = gr.Checkbox(
-                label="Preprocess Prompt",
+                label="Tiền xử lý mẫu giọng",
                 value=True,
-                info="apply silence removal and trimming to the reference "
-                "audio, add punctuation in the end of reference text (if not already)",
+                info="áp dụng loại bỏ khoảng lặng và cắt tỉa cho âm thanh mẫu, thêm dấu câu ở cuối văn bản mẫu (nếu chưa có)",
             )
             po = gr.Checkbox(
-                label="Postprocess Output",
+                label="Hậu xử lý đầu ra",
                 value=True,
-                info="Remove long silences from generated audio.",
+                info="Loại bỏ các khoảng lặng dài khỏi âm thanh được sinh ra.",
             )
         return ns, gs, dn, sp, du, pp, po
 
@@ -329,18 +338,18 @@ by Xiaomi Next-gen Kaldi team.
                 with gr.Row():
                     with gr.Column(scale=1):
                         vc_text = gr.Textbox(
-                            label="Text to Synthesize",
+                            label="Văn bản cần tổng hợp",
                             lines=4,
-                            placeholder="Enter the text you want to synthesize...",
+                            placeholder="Nhập văn bản bạn muốn tổng hợp...",
                         )
                         vc_clone_dropdown = gr.Dropdown(
-                            label="Choose Voice Clone / Chọn Voice Clone",
+                            label="Chọn Voice Clone",
                             choices=get_voice_clone_choices(),
                             interactive=True,
                         )
-                        vc_refresh_clones_btn = gr.Button("Refresh Voice Clones / Tải lại danh sách")
+                        vc_refresh_clones_btn = gr.Button("Tải lại danh sách Voice Clone")
                         
-                        vc_lang = _lang_dropdown("Language (optional)")
+                        vc_lang = _lang_dropdown("Ngôn ngữ (Tuỳ chọn)")
                         (
                             vc_ns,
                             vc_gs,
@@ -350,13 +359,13 @@ by Xiaomi Next-gen Kaldi team.
                             vc_pp,
                             vc_po,
                         ) = _gen_settings()
-                        vc_btn = gr.Button("Generate ", variant="primary")
+                        vc_btn = gr.Button("Tạo ", variant="primary")
                     with gr.Column(scale=1):
                         vc_audio = gr.Audio(
-                            label="Output Audio ",
+                            label="Âm thanh đầu ra ",
                             type="filepath",
                         )
-                        vc_status = gr.Textbox(label="Status ", lines=2)
+                        vc_status = gr.Textbox(label="Trạng thái ", lines=2)
 
                 def _refresh_choices():
                     return gr.update(choices=get_voice_clone_choices())
@@ -379,34 +388,63 @@ by Xiaomi Next-gen Kaldi team.
                         return None, "Selected Voice Clone not found in DB."
                     
                     audio_drive_id = clone_row.iloc[0]["Ref Audio Drive ID"]
-                    ref_text = clone_row.iloc[0]["Ref Text"]
+                    ref_text = clone_row.iloc[0]["Ref Text"] or None
                     
                     history_id = db.add_history(text, clone_name, "Processing")
-                    
-                    # Download ref audio to temp
-                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_ref:
-                        ref_audio_path = tmp_ref.name
-                    
-                    success = db.download_audio(audio_drive_id, ref_audio_path)
-                    if not success:
-                        db.update_history_status(history_id, "Failed (Cannot download ref audio)")
-                        return None, "Failed to download reference audio from Drive."
-                    
-                    res_audio, res_status = _gen(
-                        text,
-                        lang,
-                        ref_audio_path,
-                        None,
-                        ns,
-                        gs,
-                        dn,
-                        sp,
-                        du,
-                        pp,
-                        po,
-                        mode="clone",
-                        ref_text=ref_text or None,
+
+                    # --- Cache VoiceClonePrompt theo tên clone ---
+                    # Lần đầu: download file âm thanh mẫu và tạo prompt (chạy ASR nếu cần).
+                    # Các lần sau: dùng lại prompt đã cache, bỏ qua download + ASR.
+                    if clone_name not in _voice_prompt_cache:
+                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_ref:
+                            ref_audio_path = tmp_ref.name
+                        success = db.download_audio(audio_drive_id, ref_audio_path)
+                        if not success:
+                            db.update_history_status(history_id, "Failed (Cannot download ref audio)")
+                            return None, "Failed to download reference audio from Drive."
+                        try:
+                            _voice_prompt_cache[clone_name] = model.create_voice_clone_prompt(
+                                ref_audio=ref_audio_path,
+                                ref_text=ref_text,
+                            )
+                        except Exception as e:
+                            db.update_history_status(history_id, f"Failed (create_voice_clone_prompt: {e})")
+                            return None, f"Error building voice prompt: {e}"
+
+                    voice_prompt = _voice_prompt_cache[clone_name]
+
+                    # --- Gen audio dùng cached voice prompt ---
+                    gen_config = OmniVoiceGenerationConfig(
+                        num_step=int(ns or 16),
+                        guidance_scale=float(gs) if gs is not None else 2.0,
+                        denoise=bool(dn) if dn is not None else True,
+                        preprocess_prompt=bool(pp),
+                        postprocess_output=bool(po),
+                        audio_chunk_duration=12.0,
+                        audio_chunk_threshold=20.0,
                     )
+                    lang = lang if (lang and lang != "Auto") else None
+                    kw: Dict[str, Any] = dict(
+                        text=text.strip(),
+                        language=lang,
+                        generation_config=gen_config,
+                        voice_clone_prompt=voice_prompt,
+                    )
+                    if sp is not None and float(sp) != 1.0:
+                        kw["speed"] = float(sp)
+                    if du is not None and float(du) > 0:
+                        kw["duration"] = float(du)
+
+                    try:
+                        import torchaudio as _ta
+                        audio = model.generate(**kw)
+                        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_out:
+                            _ta.save(tmp_out.name, audio[0], sampling_rate)
+                        res_audio = tmp_out.name
+                        res_status = "Done."
+                    except Exception as e:
+                        res_audio = None
+                        res_status = f"Error: {type(e).__name__}: {e}"
                     
                     if res_audio:
                         db.update_history_status(history_id, "Success", res_audio)
@@ -436,22 +474,22 @@ by Xiaomi Next-gen Kaldi team.
             # Trang quản lý voice clone
             # ==============================================================
             with gr.TabItem("Quản lý Voice Clone"):
-                gr.Markdown("### Create and Manage Voice Clones")
+                gr.Markdown("### Tạo và Quản lý Voice Clones")
                 with gr.Row():
                     with gr.Column(scale=1):
-                        new_clone_name = gr.Textbox(label="Clone Name / Tên Voice")
-                        new_clone_audio = gr.Audio(label="Reference Audio / File ghi âm", type="filepath")
-                        new_clone_text = gr.Textbox(label="Reference Text / Văn bản mẫu (Optional)", lines=2)
-                        add_clone_btn = gr.Button("Add Voice Clone / Thêm Voice", variant="primary")
-                        add_clone_status = gr.Textbox(label="Status", interactive=False)
+                        new_clone_name = gr.Textbox(label="Tên Voice")
+                        new_clone_audio = gr.Audio(label="File ghi âm mẫu", type="filepath")
+                        new_clone_text = gr.Textbox(label="Văn bản mẫu (Tuỳ chọn)", lines=2)
+                        add_clone_btn = gr.Button("Thêm Voice Clone", variant="primary")
+                        add_clone_status = gr.Textbox(label="Trạng thái", interactive=False)
                     
                     with gr.Column(scale=2):
-                        clones_df_ui = gr.Dataframe(label="Existing Voice Clones")
-                        refresh_clones_btn = gr.Button("Refresh List")
+                        clones_df_ui = gr.Dataframe(label="Các Voice Clones hiện có")
+                        refresh_clones_btn = gr.Button("Làm mới danh sách")
                         
-                        delete_clone_id = gr.Textbox(label="Enter ID to delete / Nhập ID để xóa")
-                        delete_clone_btn = gr.Button("Delete Voice Clone", variant="stop")
-                        delete_clone_status = gr.Textbox(label="Delete Status", interactive=False)
+                        delete_clone_id = gr.Textbox(label="Nhập ID để xóa")
+                        delete_clone_btn = gr.Button("Xóa Voice Clone", variant="stop")
+                        delete_clone_status = gr.Textbox(label="Trạng thái xóa", interactive=False)
 
                 def load_clones_df():
                     if not db.initialized:
@@ -490,19 +528,19 @@ by Xiaomi Next-gen Kaldi team.
             # Trang quản lý lịch sử tạo voice
             # ==============================================================
             with gr.TabItem("Quản lý Lịch sử"):
-                gr.Markdown("### Generation History / Lịch sử tạo voice")
-                history_df_ui = gr.Dataframe(label="History Records")
-                refresh_history_btn = gr.Button("Refresh History")
+                gr.Markdown("### Lịch sử tạo voice")
+                history_df_ui = gr.Dataframe(label="Bản ghi lịch sử")
+                refresh_history_btn = gr.Button("Làm mới lịch sử")
                 
                 with gr.Row():
-                    history_action_id = gr.Textbox(label="History ID for Action")
+                    history_action_id = gr.Textbox(label="ID lịch sử để thao tác")
                 with gr.Row():
-                    history_download_btn = gr.Button("Download Generated Audio", variant="primary")
-                    history_delete_btn = gr.Button("Delete Record", variant="stop")
-                    history_retry_btn = gr.Button("Regenerate", variant="secondary")
+                    history_download_btn = gr.Button("Tải xuống âm thanh đã tạo", variant="primary")
+                    history_delete_btn = gr.Button("Xóa bản ghi", variant="stop")
+                    history_retry_btn = gr.Button("Tạo lại", variant="secondary")
                 
-                history_action_status = gr.Textbox(label="Action Status", interactive=False)
-                history_audio_output = gr.Audio(label="Downloaded Audio", type="filepath")
+                history_action_status = gr.Textbox(label="Trạng thái thao tác", interactive=False)
+                history_audio_output = gr.Audio(label="Âm thanh đã tải xuống", type="filepath")
 
                 def load_history_df():
                     if not db.initialized:
@@ -574,13 +612,13 @@ by Xiaomi Next-gen Kaldi team.
             # ==============================================================
             # Voice Design (Original)
             # ==============================================================
-            with gr.TabItem("Voice Design"):
+            with gr.TabItem("Thiết kế giọng nói (Voice Design)"):
                 with gr.Row():
                     with gr.Column(scale=1):
                         vd_text = gr.Textbox(
-                            label="Text to Synthesize ",
+                            label="Văn bản cần tổng hợp ",
                             lines=4,
-                            placeholder="Enter the text you want to synthesize...",
+                            placeholder="Nhập văn bản bạn muốn tổng hợp...",
                         )
                         vd_lang = _lang_dropdown()
 
@@ -605,13 +643,13 @@ by Xiaomi Next-gen Kaldi team.
                             vd_pp,
                             vd_po,
                         ) = _gen_settings()
-                        vd_btn = gr.Button("Generate ", variant="primary")
+                        vd_btn = gr.Button("Tạo ", variant="primary")
                     with gr.Column(scale=1):
                         vd_audio = gr.Audio(
-                            label="Output Audio",
+                            label="Âm thanh đầu ra",
                             type="filepath",
                         )
-                        vd_status = gr.Textbox(label="Status ", lines=2)
+                        vd_status = gr.Textbox(label="Trạng thái ", lines=2)
 
                 def _build_instruct(groups):
                     selected = [g for g in groups if g and g != "Auto"]
@@ -692,6 +730,16 @@ def main(argv=None) -> int:
         load_asr=True,
     )
     print("Model loaded.")
+
+    # --- torch.compile: tăng tốc LLM backbone ~20-40% sau lần đầu warm-up ---
+    # Chỉ áp dụng trên CUDA vì MPS/CPU chưa hỗ trợ tốt.
+    if device.startswith("cuda"):
+        try:
+            logging.info("Compiling LLM backbone with torch.compile (mode=reduce-overhead)...")
+            model.llm = torch.compile(model.llm, mode="reduce-overhead")
+            logging.info("torch.compile applied successfully.")
+        except Exception as e:
+            logging.warning(f"torch.compile failed (skipping): {e}")
 
     demo = build_demo(model, checkpoint)
 
