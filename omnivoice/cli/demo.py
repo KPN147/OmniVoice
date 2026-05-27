@@ -280,10 +280,10 @@ def build_demo(
             ns = gr.Slider(
                 4,
                 64,
-                value=16,
+                value=32,
                 step=1,
                 label="Số bước (Inference Steps)",
-                info="Mặc định: 16 (nhanh hơn). Tăng lên 32 để chất lượng tốt hơn.",
+                info="Mặc định: 32. Có thể giảm xuống 16 để gen nhanh hơn (chất lượng giảm nhẹ).",
             )
             dn = gr.Checkbox(
                 label="Khử nhiễu",
