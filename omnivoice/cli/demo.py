@@ -518,6 +518,21 @@ def build_demo(
                     inputs=[delete_clone_id],
                     outputs=[delete_clone_status, clones_df_ui]
                 )
+
+                def on_select_clone(evt: gr.SelectData, df):
+                    try:
+                        if isinstance(df, pd.DataFrame) and not df.empty and evt.index[0] < len(df):
+                            return str(df.iloc[evt.index[0]]["ID"])
+                    except Exception:
+                        pass
+                    return ""
+
+                clones_df_ui.select(
+                    on_select_clone,
+                    inputs=[clones_df_ui],
+                    outputs=[delete_clone_id]
+                )
+
                 demo.load(fn=load_clones_df, inputs=[], outputs=[clones_df_ui])
 
             # ==============================================================
@@ -603,6 +618,21 @@ def build_demo(
                     inputs=[history_action_id],
                     outputs=[history_action_status, history_df_ui]
                 )
+
+                def on_select_history(evt: gr.SelectData, df):
+                    try:
+                        if isinstance(df, pd.DataFrame) and not df.empty and evt.index[0] < len(df):
+                            return str(df.iloc[evt.index[0]]["ID"])
+                    except Exception:
+                        pass
+                    return ""
+
+                history_df_ui.select(
+                    on_select_history,
+                    inputs=[history_df_ui],
+                    outputs=[history_action_id]
+                )
+
                 demo.load(fn=load_history_df, inputs=[], outputs=[history_df_ui])
 
             # ==============================================================
