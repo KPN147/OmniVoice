@@ -218,14 +218,17 @@ def build_demo(
                 kw["instruct"] = instruct.strip()
 
         try:
+            import time
+            t0 = time.time()
             audio = model.generate(**kw)
+            t1 = time.time()
         except Exception as e:
-            return None, f"Error: {type(e).__name__}: {e}"
+            return None, f"Lỗi: {type(e).__name__}: {e}"
 
         import torchaudio
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
             torchaudio.save(tmp_file.name, audio[0], sampling_rate)
-        return tmp_file.name, "Done."
+        return tmp_file.name, f"Thành công! Thời gian xử lý model: {t1 - t0:.1f} giây."
 
     # Allow external wrappers (e.g. spaces.GPU for ZeroGPU Spaces)
     _gen = generate_fn if generate_fn is not None else _gen_core
@@ -426,15 +429,18 @@ def build_demo(
                         kw["duration"] = float(du)
 
                     try:
+                        import time
+                        t0 = time.time()
                         import torchaudio as _ta
                         audio = model.generate(**kw)
+                        t1 = time.time()
                         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_out:
                             _ta.save(tmp_out.name, audio[0], sampling_rate)
                         res_audio = tmp_out.name
-                        res_status = "Done."
+                        res_status = f"Thành công! Thời gian xử lý model: {t1 - t0:.1f} giây."
                     except Exception as e:
                         res_audio = None
-                        res_status = f"Error: {type(e).__name__}: {e}"
+                        res_status = f"Lỗi: {type(e).__name__}: {e}"
                     
                     if res_audio:
                         db.update_history_status(history_id, "Success", res_audio)
