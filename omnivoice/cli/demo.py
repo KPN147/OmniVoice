@@ -309,17 +309,7 @@ def build_demo(
 
     with gr.Blocks(theme=theme, css=css, title="OmniVoice Demo") as demo:
         gr.Markdown(
-            """
-# OmniVoice Demo
-
-State-of-the-art text-to-speech model for **600+ languages**, supporting:
-
-- **Voice Clone** — Clone any voice from a reference audio
-- **Voice Design** — Create custom voices with speaker attributes
-
-Built with [OmniVoice](https://github.com/k2-fsa/OmniVoice)
-by Xiaomi Next-gen Kaldi team.
-"""
+            """UI Demo"""
         )
 
         def get_voice_clone_choices():
