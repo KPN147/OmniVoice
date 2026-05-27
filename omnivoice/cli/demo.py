@@ -212,9 +212,10 @@ def build_demo(
         except Exception as e:
             return None, f"Error: {type(e).__name__}: {e}"
 
-        waveform = audio[0].squeeze(0).numpy()  # (T,)
-        waveform = (waveform * 32767).astype(np.int16)
-        return (sampling_rate, waveform), "Done."
+        import torchaudio
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
+            torchaudio.save(tmp_file.name, audio[0], sampling_rate)
+        return tmp_file.name, "Done."
 
     # Allow external wrappers (e.g. spaces.GPU for ZeroGPU Spaces)
     _gen = generate_fn if generate_fn is not None else _gen_core
@@ -353,7 +354,7 @@ by Xiaomi Next-gen Kaldi team.
                     with gr.Column(scale=1):
                         vc_audio = gr.Audio(
                             label="Output Audio ",
-                            type="numpy",
+                            type="filepath",
                         )
                         vc_status = gr.Textbox(label="Status ", lines=2)
 
@@ -408,10 +409,7 @@ by Xiaomi Next-gen Kaldi team.
                     )
                     
                     if res_audio:
-                        # res_audio is (sampling_rate, waveform)
-                        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_out:
-                            sf.write(tmp_out.name, res_audio[1], res_audio[0])
-                            db.update_history_status(history_id, "Success", tmp_out.name)
+                        db.update_history_status(history_id, "Success", res_audio)
                     else:
                         db.update_history_status(history_id, f"Failed ({res_status})")
                         
@@ -611,7 +609,7 @@ by Xiaomi Next-gen Kaldi team.
                     with gr.Column(scale=1):
                         vd_audio = gr.Audio(
                             label="Output Audio",
-                            type="numpy",
+                            type="filepath",
                         )
                         vd_status = gr.Textbox(label="Status ", lines=2)
 
